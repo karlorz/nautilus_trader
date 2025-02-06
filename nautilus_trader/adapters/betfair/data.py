@@ -101,7 +101,6 @@ class BetfairDataClient(LiveMarketDataClient):
             message_handler=self.on_market_update,
             certs_dir=config.certs_dir,
         )
-        self._reconnect_in_progress = False
 
         self._parser = BetfairParser(currency=config.account_currency)
 
@@ -179,32 +178,31 @@ class BetfairDataClient(LiveMarketDataClient):
         self._log.info("Closing BetfairClient")
         await self._client.disconnect()
 
-    async def _reconnect(self) -> None:
-        self._log.info("Attempting reconnect")
-        if self._stream.is_connected:
-            await self._stream.reconnect()
-        self._reconnect_in_progress = False
-
     def _reset(self) -> None:
-        if self.is_connected:
+        if self._stream.is_active():
             self._log.error("Cannot reset a connected data client")
             return
 
         self._subscribed_instrument_ids = set()
 
     def _dispose(self) -> None:
-        if self.is_connected:
+        if self._stream.is_active():
             self._log.error("Cannot dispose a connected data client")
             return
 
     # -- SUBSCRIPTIONS ----------------------------------------------------------------------------
 
     async def _delayed_subscribe(self, delay: int = 0) -> None:
-        self._log.debug(f"Scheduling subscribe for delay={delay}")
-        await asyncio.sleep(delay)
-        self._log.info(f"Sending subscribe for market_ids {self._subscribed_market_ids}")
-        await self._stream.send_subscription_message(market_ids=list(self._subscribed_market_ids))
-        self._log.info(f"Added market_ids {self._subscribed_market_ids} for <OrderBook> data")
+        try:
+            self._log.debug(f"Scheduling subscribe for delay={delay}")
+            await asyncio.sleep(delay)
+            self._log.info(f"Sending subscribe for market_ids {self._subscribed_market_ids}")
+            await self._stream.send_subscription_message(
+                market_ids=list(self._subscribed_market_ids),
+            )
+            self._log.info(f"Added market_ids {self._subscribed_market_ids} for <OrderBook> data")
+        except asyncio.CancelledError:
+            self._log.warning("Canceled task 'delayed_subscribe'")
 
     async def _subscribe_order_book_deltas(
         self,
@@ -381,19 +379,15 @@ class BetfairDataClient(LiveMarketDataClient):
             elif update.error_code == StatusErrorCode.SUBSCRIPTION_LIMIT_EXCEEDED:
                 raise RuntimeError("Subscription request limit exceeded")
             elif update.error_code == StatusErrorCode.INVALID_SESSION_INFORMATION:
-                if self._reconnect_in_progress:
+                if self._stream.is_reconnecting():
                     self._log.info("Reconnect already in progress")
                     return
                 self._log.info("Invalid session information, reconnecting client")
-                self._reconnect_in_progress = True
-                self._stream.is_connected = False
                 self._client.reset_headers()
-                self._log.info("Reconnecting socket")
-                self.create_task(self._reconnect())
+                self.create_task(self._stream.reconnect())
             else:
-                if self._reconnect_in_progress:
+                if self._stream.is_reconnecting():
                     self._log.info("Reconnect already in progress")
                     return
-                self._log.info("Unknown failure message, scheduling restart")
-                self._reconnect_in_progress = True
-                self.create_task(self._reconnect())
+                self._log.warning("Unknown API error, scheduling reconnect")
+                self.create_task(self._stream.reconnect())

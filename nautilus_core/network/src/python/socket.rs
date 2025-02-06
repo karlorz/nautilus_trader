@@ -23,9 +23,9 @@ use pyo3::prelude::*;
 use tokio::io::AsyncWriteExt;
 use tokio_tungstenite::tungstenite::stream::Mode;
 
-use crate::socket::{
-    SocketClient, SocketConfig, CONNECTION_ACTIVE, CONNECTION_CLOSED, CONNECTION_DISCONNECT,
-    CONNECTION_RECONNECT,
+use crate::{
+    mode::ConnectionMode,
+    socket::{SocketClient, SocketConfig},
 };
 
 #[pymethods]
@@ -95,8 +95,7 @@ impl SocketClient {
     /// Check if the client is still alive.
     ///
     /// Even if the connection is disconnected the client will still be alive
-    /// and trying to reconnect. Only when reconnect fails the client will
-    /// terminate.
+    /// and trying to reconnect.
     ///
     /// This is particularly useful for check why a `send` failed. It could
     /// be because the connection disconnected and the client is still alive
@@ -122,27 +121,32 @@ impl SocketClient {
         slf.is_closed()
     }
 
+    #[pyo3(name = "mode")]
+    fn py_mode(slf: PyRef<'_, Self>) -> String {
+        slf.connection_mode().to_string()
+    }
+
     /// Reconnect the client.
     #[pyo3(name = "reconnect")]
     fn py_reconnect<'py>(slf: PyRef<'_, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let connection_mode = slf.connection_mode.clone();
-        let mode = connection_mode.load(Ordering::SeqCst);
-        tracing::debug!("Reconnect from mode {mode}");
+        let mode = slf.connection_mode.clone();
+        let mode_str = ConnectionMode::from_atomic(&mode).to_string();
+        tracing::debug!("Reconnect from mode {mode_str}");
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            match connection_mode.load(Ordering::SeqCst) {
-                CONNECTION_RECONNECT => {
+            match ConnectionMode::from_atomic(&mode) {
+                ConnectionMode::Reconnect => {
                     tracing::warn!("Cannot reconnect: socket already reconnecting");
                 }
-                CONNECTION_DISCONNECT => {
+                ConnectionMode::Disconnect => {
                     tracing::warn!("Cannot reconnect: socket disconnecting");
                 }
-                CONNECTION_CLOSED => {
+                ConnectionMode::Closed => {
                     tracing::warn!("Cannot reconnect: socket closed");
                 }
                 _ => {
-                    connection_mode.store(CONNECTION_RECONNECT, Ordering::SeqCst);
-                    while connection_mode.load(Ordering::SeqCst) != CONNECTION_ACTIVE {
+                    mode.store(ConnectionMode::Reconnect.as_u8(), Ordering::SeqCst);
+                    while !ConnectionMode::from_atomic(&mode).is_active() {
                         tokio::time::sleep(Duration::from_millis(10)).await;
                     }
                 }
@@ -163,22 +167,22 @@ impl SocketClient {
     /// - Any auto-reconnect job should be aborted before closing the client
     #[pyo3(name = "close")]
     fn py_close<'py>(slf: PyRef<'_, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let connection_mode = slf.connection_mode.clone();
-        let mode = connection_mode.load(Ordering::SeqCst);
-        tracing::debug!("Close from mode {mode}");
+        let mode = slf.connection_mode.clone();
+        let mode_str = ConnectionMode::from_atomic(&mode).to_string();
+        tracing::debug!("Close from mode {mode_str}");
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            match connection_mode.load(Ordering::SeqCst) {
-                CONNECTION_CLOSED => {
+            match ConnectionMode::from_atomic(&mode) {
+                ConnectionMode::Closed => {
                     tracing::warn!("Socket already closed");
                 }
-                CONNECTION_DISCONNECT => {
+                ConnectionMode::Disconnect => {
                     tracing::warn!("Socket already disconnecting");
                 }
                 _ => {
-                    connection_mode.store(CONNECTION_DISCONNECT, Ordering::SeqCst);
-                    while connection_mode.load(Ordering::SeqCst) != CONNECTION_CLOSED {
-                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    mode.store(ConnectionMode::Disconnect.as_u8(), Ordering::SeqCst);
+                    while !ConnectionMode::from_atomic(&mode).is_closed() {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
                     }
                 }
             }
@@ -199,9 +203,60 @@ impl SocketClient {
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyAny>> {
         data.extend(&slf.suffix);
+        tracing::trace!("Sending {}", String::from_utf8_lossy(&data));
+
         let writer = slf.writer.clone();
+        let mode = slf.connection_mode.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            if ConnectionMode::from_atomic(&mode).is_closed() {
+                let msg = format!(
+                    "Cannot send data ({}): socket closed",
+                    String::from_utf8_lossy(&data)
+                );
+                log::error!("{}", msg);
+                return Ok(());
+            }
+
+            let timeout = Duration::from_secs(2);
+            let check_interval = Duration::from_millis(1);
+
+            if !ConnectionMode::from_atomic(&mode).is_active() {
+                tracing::debug!("Waiting for client to become ACTIVE before sending (2s)...");
+                match tokio::time::timeout(timeout, async {
+                    while !ConnectionMode::from_atomic(&mode).is_active() {
+                        if matches!(
+                            ConnectionMode::from_atomic(&mode),
+                            ConnectionMode::Disconnect | ConnectionMode::Closed
+                        ) {
+                            return Err("Client disconnected waiting to send");
+                        }
+
+                        tokio::time::sleep(check_interval).await;
+                    }
+
+                    Ok(())
+                })
+                .await
+                {
+                    Ok(Ok(())) => tracing::debug!("Client now active"),
+                    Ok(Err(e)) => {
+                        tracing::error!(
+                            "Cannot send data ({}): {e}",
+                            String::from_utf8_lossy(&data)
+                        );
+                        return Ok(());
+                    }
+                    Err(_) => {
+                        tracing::error!(
+                            "Cannot send data ({}): timeout waiting to become ACTIVE",
+                            String::from_utf8_lossy(&data)
+                        );
+                        return Ok(());
+                    }
+                }
+            }
+
             let mut writer = writer.lock().await;
             writer.write_all(&data).await?;
             Ok(())

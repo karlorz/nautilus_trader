@@ -21,6 +21,8 @@ This release will be the final version that uses Poetry for package and dependen
 - Added `stream_conflate_ms` config option for `BetfairDataClientConfig`
 - Added `recv_window_ms` config option for `BybitDataClientConfig` and `BybitExecClientConfig`
 - Added `open_check_open_only` config option for `LiveExecEngineConfig`
+- Added `BetSide` enum (to support `Bet` and `BetPosition`)
+- Added `Bet` and `BetPosition` for betting market risk and PnL calculations
 
 ### Breaking Changes
 - Renamed `OptionsContract` instrument to `OptionContract` for more technically correct terminology (singular)
@@ -33,6 +35,8 @@ This release will be the final version that uses Poetry for package and dependen
 - Moved SQL schema directory to `schemas/sql` (reinstall the Nautilus CLI with `make install-cli`)
 - Changed `BettingInstrument` default `min_notional` to `None`
 - Changed meaning of `ws_connection_delay_secs` for [PolymarketDataClientConfig](https://github.com/nautechsystems/nautilus_trader/blob/develop/nautilus_trader/adapters/polymarket/config.py) to be **non-initial** delay (#2271)
+- Removed `max_ws_reconnection_tries` for dYdX configs (no longer applicable with infinite retries and exponential backoff)
+- Removed `max_ws_reconnection_tries` for Bybit configs (no longer applicable with infinite retries and exponential backoff)
 
 ### Internal Improvements
 - Added `ThrottledEnqueuer` for more efficient and robust live engines queue management and logging
@@ -40,8 +44,8 @@ This release will be the final version that uses Poetry for package and dependen
 - Added custom certificate loading for `SocketClient` TLS
 - Added `check_nonempty_string` for string validation in Rust
 - Improved Polymarket WebSocket subscription handling by configurable delay (#2271), thanks @ryantam626
-- Improved `WebSocketClient` with state management, timeouts, and more robust reconnect logic
-- Improved `SocketClient` with state management, timeouts, and more robust reconnect logic
+- Improved `WebSocketClient` with state management, error handling, timeouts and robust reconnects with exponential backoff
+- Improved `SocketClient` with state management, error handling, timeouts and robust reconnects with exponential backoff
 - Improved `TradingNode` shutdown when running with `asyncio.run()` (more orderly handling of event loop)
 - Improved `NautilusKernel` pending tasks cancellation on shutdown
 - Improved `TardisHttpClient` requests and error handling
@@ -49,6 +53,7 @@ This release will be the final version that uses Poetry for package and dependen
 - Refined `Currency` `name` to accept non-ASCII characters (common for foreign currencies)
 - Refactored CI with composite actions (#2242), thanks @sunlei
 - Refactored Option Greeks feature (#2266), thanks @faysou
+- Changed validation to allow zero commission for `PerContractFeeModel` (#2282), thanks @stefansimik
 - Changed to use `mold` as the linker in CI (#2254), thanks @sunlei
 - Ported market order processing for `OrderMatchingEngine` in Rust (#2202), thanks @filipmacek
 - Ported limit order processing for `OrderMatchingEngine` in Rust (#2212), thanks @filipmacek
@@ -89,6 +94,7 @@ This release will be the final version that uses Poetry for package and dependen
 - Fixed `Cache.bar_types` `aggregation_source` filtering, was incorrectly using `price_type` (#2269), thanks @faysou
 - Fixed missing `combo` instrument type for Tardis integration
 - Fixed quote tick processing from bars in `OrderMatchingEngine` resulting in sizes below the minimum increment (#2275), thanks for reporting @miller-moore
+- Fixed initialization of `BinanceErrorCode`s requiring `int`
 
 ### Documentation Updates
 - Added Databento overview tutorial (#2233, #2252), thanks @stefansimik
