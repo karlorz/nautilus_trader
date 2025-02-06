@@ -2,7 +2,8 @@ name: coverage
 
 on:
   push:
-    branches: [nightly]
+    branches-ignore: [nightly]
+    workflow_dispatch: null
 
 jobs:
   build:
