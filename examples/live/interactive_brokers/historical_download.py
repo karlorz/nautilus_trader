@@ -23,6 +23,7 @@ from nautilus_trader.adapters.interactive_brokers.config import DockerizedIBGate
 from nautilus_trader.adapters.interactive_brokers.gateway import DockerizedIBGateway
 from nautilus_trader.adapters.interactive_brokers.historical import HistoricInteractiveBrokersClient
 from nautilus_trader.core.correctness import PyCondition
+from nautilus_trader.model.data import Bar
 from nautilus_trader.persistence.catalog import ParquetDataCatalog
 
 
@@ -53,43 +54,43 @@ async def main(
         exchange="SMART",
         primaryExchange="NASDAQ",
     )
-    instrument_id = "TSLA.NASDAQ"
+    instrument_id = "ESH25.CME"
 
     client = HistoricInteractiveBrokersClient(host=host, port=port, client_id=5)
     await client.connect()
     await asyncio.sleep(2)
 
     instruments = await client.request_instruments(
-        contracts=[contract],
+        # contracts=[contract],
         instrument_ids=[instrument_id],
     )
 
     bars = await client.request_bars(
         bar_specifications=["1-HOUR-LAST", "30-MINUTE-MID"],
-        start_date_time=datetime.datetime(2023, 11, 6, 9, 30),
-        end_date_time=datetime.datetime(2023, 11, 6, 16, 30),
+        start_date_time=datetime.datetime(2024, 11, 6, 9, 30),
+        end_date_time=datetime.datetime(2024, 11, 6, 16, 30),
         tz_name="America/New_York",
-        contracts=[contract],
+        # contracts=[contract],
         instrument_ids=[instrument_id],
     )
 
-    trade_ticks = await client.request_ticks(
-        "TRADES",
-        start_date_time=datetime.datetime(2023, 11, 6, 10, 0),
-        end_date_time=datetime.datetime(2023, 11, 6, 10, 1),
-        tz_name="America/New_York",
-        contracts=[contract],
-        instrument_ids=[instrument_id],
-    )
+    # trade_ticks = await client.request_ticks(
+    #     "TRADES",
+    #     start_date_time=datetime.datetime(2023, 11, 6, 10, 0),
+    #     end_date_time=datetime.datetime(2023, 11, 6, 10, 1),
+    #     tz_name="America/New_York",
+    #     # contracts=[contract],
+    #     instrument_ids=[instrument_id],
+    # )
 
-    quote_ticks = await client.request_ticks(
-        "BID_ASK",
-        start_date_time=datetime.datetime(2023, 11, 6, 10, 0),
-        end_date_time=datetime.datetime(2023, 11, 6, 10, 1),
-        tz_name="America/New_York",
-        contracts=[contract],
-        instrument_ids=[instrument_id],
-    )
+    # quote_ticks = await client.request_ticks(
+    #     "BID_ASK",
+    #     start_date_time=datetime.datetime(2023, 11, 6, 10, 0),
+    #     end_date_time=datetime.datetime(2023, 11, 6, 10, 1),
+    #     tz_name="America/New_York",
+    #     # contracts=[contract],
+    #     instrument_ids=[instrument_id],
+    # )
 
     if gateway:
         gateway.stop()
@@ -97,18 +98,25 @@ async def main(
     catalog = ParquetDataCatalog("./catalog")
     catalog.write_data(instruments)
     catalog.write_data(bars)
-    catalog.write_data(trade_ticks)
-    catalog.write_data(quote_ticks)
+    # catalog.write_data(trade_ticks)
+    # catalog.write_data(quote_ticks)
+    
+    # Read and print bar data
+    loaded_bars = catalog.query(Bar)
+    print("\nLoaded bar data:")
+    print(loaded_bars)
+    
 
 
 if __name__ == "__main__":
-    gateway_config = DockerizedIBGatewayConfig(
-        username=os.environ["TWS_USERNAME"],
-        password=os.environ["TWS_PASSWORD"],
-        trading_mode="paper",
-    )
-    asyncio.run(main(dockerized_gateway=gateway_config))
+    # gateway_config = DockerizedIBGatewayConfig(
+    #     username=os.environ["TWS_USERNAME"],
+    #     password=os.environ["TWS_PASSWORD"],
+    #     trading_mode="paper",
+    # )
+    # asyncio.run(main(dockerized_gateway=gateway_config))
 
     # To connect to an existing TWS or Gateway instance without the use of automated dockerized gateway,
     # follow this format:
     # asyncio.run(main(host="127.0.0.1", port=7497))
+    asyncio.run(main(host="10.10.1.10", port=7497))
