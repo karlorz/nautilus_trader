@@ -35,6 +35,7 @@ This release will be the final version that uses Poetry for package and dependen
 - Moved SQL schema directory to `schemas/sql` (reinstall the Nautilus CLI with `make install-cli`)
 - Changed `BettingInstrument` default `min_notional` to `None`
 - Changed meaning of `ws_connection_delay_secs` for [PolymarketDataClientConfig](https://github.com/nautechsystems/nautilus_trader/blob/develop/nautilus_trader/adapters/polymarket/config.py) to be **non-initial** delay (#2271)
+- Changed `GATEIO` Tardis venue to `GATE_IO` for consistency with `CRYPTO_COM` and `BLOCKCHAIN_COM`
 - Removed `max_ws_reconnection_tries` for dYdX configs (no longer applicable with infinite retries and exponential backoff)
 - Removed `max_ws_reconnection_tries` for Bybit configs (no longer applicable with infinite retries and exponential backoff)
 
@@ -50,6 +51,7 @@ This release will be the final version that uses Poetry for package and dependen
 - Improved `NautilusKernel` pending tasks cancellation on shutdown
 - Improved `TardisHttpClient` requests and error handling
 - Improved log file writer to strip ANSI escape codes and unprintable chars
+- Improved `clean` make target behavior and added `distclean` make target (#2286), @demonkoryu
 - Refined `Currency` `name` to accept non-ASCII characters (common for foreign currencies)
 - Refactored CI with composite actions (#2242), thanks @sunlei
 - Refactored Option Greeks feature (#2266), thanks @faysou
@@ -95,11 +97,14 @@ This release will be the final version that uses Poetry for package and dependen
 - Fixed missing `combo` instrument type for Tardis integration
 - Fixed quote tick processing from bars in `OrderMatchingEngine` resulting in sizes below the minimum increment (#2275), thanks for reporting @miller-moore
 - Fixed initialization of `BinanceErrorCode`s requiring `int`
+- Fixed resolution of Tardis `BINANCE_DELIVERY` venue for COIN-margined contracts
+- Fixed hang in rate limiter (#2285), thanks @WyldeCat
 
 ### Documentation Updates
 - Added Databento overview tutorial (#2233, #2252), thanks @stefansimik
 - Added docs for Actor (#2233), thanks @stefansimik
 - Added docs for Portfolio limitations with bar data (#2233), thanks @stefansimik
+- Added docs overview for example locations in repository (#2287), thanks @stefansimik
 - Improved docstrings for Actor subscription and request methods
 
 ### Deprecations
