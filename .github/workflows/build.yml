@@ -5,6 +5,7 @@ on:
     branches-ignore: [master, nightly, develop]
   pull_request:
     branches-ignore: [develop]
+  workflow_dispatch: null
 
 jobs:
   pre-commit:
