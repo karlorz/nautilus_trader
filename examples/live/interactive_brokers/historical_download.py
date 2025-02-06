@@ -16,7 +16,6 @@
 
 import asyncio
 import datetime
-import os
 
 from nautilus_trader.adapters.interactive_brokers.common import IBContract
 from nautilus_trader.adapters.interactive_brokers.config import DockerizedIBGatewayConfig
@@ -61,7 +60,7 @@ async def main(
     await asyncio.sleep(2)
 
     instruments = await client.request_instruments(
-        # contracts=[contract],
+        contracts=[contract],
         instrument_ids=[instrument_id],
     )
 
@@ -100,12 +99,11 @@ async def main(
     catalog.write_data(bars)
     # catalog.write_data(trade_ticks)
     # catalog.write_data(quote_ticks)
-    
+
     # Read and print bar data
     loaded_bars = catalog.query(Bar)
     print("\nLoaded bar data:")
     print(loaded_bars)
-    
 
 
 if __name__ == "__main__":
