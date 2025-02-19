@@ -26,3 +26,6 @@ rustflags = [
 # rustflags = [
 #     "-C", "link-arg=-fuse-ld=mold",
 # ]
+
+[env]
+PYO3_PYTHON = "/home/user/.cache/pypoetry/virtualenvs/nautilus-trader-77oC7Zgq-py3.11/bin/python"
